@@ -1,11 +1,10 @@
-# Generate Gradle wrapper in a minimal project (avoids evaluating your build.gradle),
-# copy it into the repo, build with it (Java 17, Android SDK 34), and commit the wrapper back.
-name: CI - generate wrapper, build, and commit
+name: Android CI (generate wrapper if missing, build, commit wrapper)
 
 on:
   push:
-    branches: ["**"]
+    branches: [ "main", "master" ]
   pull_request:
+    branches: [ "main", "master" ]
 
 permissions:
   contents: write
@@ -18,180 +17,137 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '${{ env.JAVA_VERSION }}'
+        distribution: 'temurin'
+        cache: 'gradle'
 
-      - name: Install prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip wget git ca-certificates
+    - name: Setup Keystore
+      run: |
+        if [ -f "debug.keystore.base64" ]; then
+          echo "Decoding debug.keystore from base64..."
+          base64 -d debug.keystore.base64 > debug.keystore
+        else
+          echo "No debug.keystore.base64 found. Creating a generic debug keystore..."
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+        fi
 
-      - name: Download standalone Gradle ${GRADLE_VERSION}
-        run: |
-          set -e
-          GRADLE_ZIP="/tmp/gradle-${GRADLE_VERSION}-bin.zip"
-          if [ ! -f "$GRADLE_ZIP" ]; then
-            wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -O "$GRADLE_ZIP"
+    - name: Setup environment secrets file
+      run: |
+        if [ ! -f ".env" ]; then
+          if [ -f ".env.example" ]; then
+            cp .env.example .env
+          else
+            touch .env
           fi
-          rm -rf "/tmp/gradle-${GRADLE_VERSION}"
-          unzip -q "$GRADLE_ZIP" -d /tmp
-          echo "/tmp/gradle-${GRADLE_VERSION}/bin" > /tmp/gradle_bin_path
-        shell: bash
+        fi
 
-      - name: Generate Gradle wrapper in a minimal temp project (safe)
-        env:
-          PATH: /tmp/gradle-${{ env.GRADLE_VERSION }}/bin:${PATH}
-          GITHUB_WORKSPACE: ${{ github.workspace }}
-        run: |
-          set -euo pipefail
-          TMPDIR=$(mktemp -d)
-          echo "Creating minimal project at $TMPDIR"
-          cat > "$TMPDIR/settings.gradle" <<'SG'
+    - name: Cache Gradle directories
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*','**/gradle/wrapper/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    - name: Generate Gradle wrapper if missing (safe: use temp project)
+      env:
+        GRADLE_VERSION: ${{ env.GRADLE_VERSION }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+      run: |
+        set -euo pipefail
+        if [ -f "./gradlew" ]; then
+          echo "gradlew already present — skipping generation."
+          exit 0
+        fi
+        echo "gradlew not found — generating wrapper in a temporary minimal project"
+        TMPDIR=$(mktemp -d)
+        GRADLE_ZIP="/tmp/gradle-${GRADLE_VERSION}-bin.zip"
+        # download Gradle distribution if missing
+        if [ ! -f "${GRADLE_ZIP}" ]; then
+          wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -O "${GRADLE_ZIP}"
+        fi
+        rm -rf "/tmp/gradle-${GRADLE_VERSION}"
+        unzip -q "${GRADLE_ZIP}" -d /tmp
+        export PATH="/tmp/gradle-${GRADLE_VERSION}/bin:${PATH}"
+        echo "Creating minimal project at ${TMPDIR}"
+        cat > "${TMPDIR}/settings.gradle" <<'SG'
 rootProject.name = 'tmp-wrapper-gen'
 SG
-          cd "$TMPDIR"
-          # Generate the wrapper from the minimal project (no network logic from your real project is executed)
-          gradle wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type all
-          # Copy generated wrapper files into the repository workspace
-          echo "Copying generated wrapper into ${GITHUB_WORKSPACE}"
-          cp -v gradlew gradlew.bat "${GITHUB_WORKSPACE}/"
-          mkdir -p "${GITHUB_WORKSPACE}/gradle/wrapper"
-          cp -v -r gradle/wrapper/* "${GITHUB_WORKSPACE}/gradle/wrapper/"
-          chmod +x "${GITHUB_WORKSPACE}/gradlew"
-          ls -la "${GITHUB_WORKSPACE}/gradlew" || true
-        shell: bash
+        cd "${TMPDIR}"
+        gradle wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type all
+        echo "Copying wrapper files into repo workspace ${GITHUB_WORKSPACE}"
+        cp gradlew gradlew.bat "${GITHUB_WORKSPACE}/"
+        mkdir -p "${GITHUB_WORKSPACE}/gradle/wrapper"
+        cp -r gradle/wrapper/* "${GITHUB_WORKSPACE}/gradle/wrapper/"
+        chmod +x "${GITHUB_WORKSPACE}/gradlew"
+        echo "Generated wrapper copied."
 
-      - name: Install Android command-line tools and SDK (platform 34, build-tools 34.0.0)
-        env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-          PATH: ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin:${PATH}
-        run: |
-          set -euo pipefail
-          mkdir -p "${ANDROID_SDK_ROOT}"
-          cd "${ANDROID_SDK_ROOT}"
-          # download command line tools (versioned archive)
-          CLTOOLS_ZIP="/tmp/cmdline-tools.zip"
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O "$CLTOOLS_ZIP"
-          unzip -q "$CLTOOLS_ZIP" -d cmdline-tools/tmp
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/tmp/cmdline-tools/* cmdline-tools/latest/
-          rm -f "$CLTOOLS_ZIP"
-          export PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${PATH}"
-          yes | sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --licenses || true
-          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-        shell: bash
+    - name: Grant Gradle execute permission
+      run: chmod +x ./gradlew || true
 
-      - name: Show workspace and wrapper files (debug)
-        run: |
-          echo "Workspace: $GITHUB_WORKSPACE"
-          ls -la
-          ls -la gradle || true
-          echo "gradle/wrapper contents:"
-          ls -la gradle/wrapper || true
+    - name: Install Android command-line tools and SDK (platform 34, build-tools 34.0.0)
+      env:
+        ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+        PATH: ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin:${PATH}
+      run: |
+        set -euo pipefail
+        mkdir -p "${ANDROID_SDK_ROOT}"
+        cd "${ANDROID_SDK_ROOT}"
+        CLTOOLS_ZIP="/tmp/cmdline-tools.zip"
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O "$CLTOOLS_ZIP"
+        unzip -q "$CLTOOLS_ZIP" -d cmdline-tools/tmp
+        mkdir -p cmdline-tools/latest
+        mv cmdline-tools/tmp/cmdline-tools/* cmdline-tools/latest/
+        rm -f "$CLTOOLS_ZIP"
+        export PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${PATH}"
+        yes | sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --licenses || true
+        sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Build with generated wrapper
-        env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-          PATH: ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin:${PATH}
-        run: |
-          set -euo pipefail
-          # If your Android module is in a subdirectory, set WORK_DIR accordingly (e.g., WORK_DIR=app)
-          WORK_DIR=.
-          cd "$WORK_DIR"
-          ./gradlew --version
-          ./gradlew assembleDebug --no-daemon --stacktrace
-        shell: bash
+    - name: Show workspace (debug)
+      run: |
+        echo "Workspace: $GITHUB_WORKSPACE"
+        ls -la
+        ls -la gradle || true
+        ./gradlew --version || true
 
-      - name: Commit and push generated Gradle wrapper back to the repo
-        if: always()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Add only wrapper files
-          git add gradlew gradlew.bat gradle/wrapper || true
-          if git diff --cached --quiet; then
-            echo "No wrapper changes to commit"
-            exit 0
-          fi
-          git commit -m "Add generated Gradle wrapper (Gradle ${GRADLE_VERSION})"
-          # Try to push. If push fails (e.g., protected branch), print a helpful message and exit 0
-          if git push; then
-            echo "Pushed generated wrapper to remote"
-          else
-            echo "WARNING: git push failed. This may be due to branch protection or permissions. The wrapper is present in the workspace but could not be pushed."
-            git status --porcelain -v
-            exit 0
-          fi
-        shell: bash
-      - name: Install Gradle via apt
-        run: |
-          sudo apt-get install -y gradle
-          gradle --version
+    - name: Build Debug APK
+      run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Generate Gradle wrapper (Gradle ${{ env.GRADLE_VERSION }})
-        run: |
-          # If your project is in a subdirectory, set PROJECT_DIR (example: ./app)
-          PROJECT_DIR=.
-          cd "$PROJECT_DIR"
-          # Generate the wrapper. The system gradle should be able to create a wrapper for the requested version.
-          gradle wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type all
-        shell: bash
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Graph-debug-apk
+        path: app/build/outputs/apk/debug/*.apk
 
-      - name: Grant Gradle execute permission
-        run: chmod +x ./gradlew
-
-      - name: Install Android command-line tools and SDK (platform 34, build-tools 34.0.0)
-        run: |
-          set -e
-          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT}"
-          mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools"
-          cd "${ANDROID_SDK_ROOT}"
-          # Download Android command line tools (versioned archive used commonly in CI)
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip -d cmdline-tools/tmp
-          # Move into expected layout: cmdline-tools/latest
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/tmp/cmdline-tools/* cmdline-tools/latest/
-          rm -f cmdline-tools.zip
-          export PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${PATH}"
-          yes | sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --licenses || true
-          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-        shell: bash
-
-      - name: Build with generated wrapper
-        run: |
-          # If your Android project sits in a subdirectory, set WORK_DIR accordingly (e.g., ./app)
-          WORK_DIR=.
-          cd "$WORK_DIR"
-          ./gradlew assembleDebug --no-daemon --stacktrace
-        shell: bash
-
-      - name: Commit generated Gradle wrapper back to repo
-        if: always()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Add wrapper files
-          git add gradlew gradlew.bat gradle/wrapper || true
-          # Only commit if there are changes
-          if git diff --cached --quiet; then
-            echo "No wrapper changes to commit"
-          else
-            git commit -m "Add generated Gradle wrapper (Gradle ${GRADLE_VERSION})"
-            git push
-          fi
-        env:
-          # Use the default GITHUB_TOKEN provided to the workflow for auth by actions/checkout
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Commit generated Gradle wrapper back to repo (if any)
+      if: always()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        # Add wrapper files only
+        git add gradlew gradlew.bat gradle/wrapper || true
+        if git diff --cached --quiet; then
+          echo "No wrapper changes to commit"
+          exit 0
+        fi
+        git commit -m "Add generated Gradle wrapper (Gradle ${GRADLE_VERSION})"
+        if git push; then
+          echo "Pushed generated wrapper to remote"
+        else
+          echo "WARNING: git push failed (protected branch or permission). Wrapper is present in workspace but was not pushed."
+        fi
