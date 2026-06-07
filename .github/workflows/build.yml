@@ -61,7 +61,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    - name: Generate Gradle wrapper if missing (safe: use temp project)
+    - name: Generate Gradle
       env:
         GRADLE_VERSION: ${{ env.GRADLE_VERSION }}
         GITHUB_WORKSPACE: ${{ github.workspace }}
