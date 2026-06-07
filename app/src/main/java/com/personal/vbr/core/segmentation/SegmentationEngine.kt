@@ -54,7 +54,7 @@ class SegmentationEngine private constructor() {
 
     companion object {
         private const val TAG = "SegmentationEngine"
-        private const val MODEL_ASSET = "mediapipe/selfie_segmentation.tflite"
+        private const val MODEL_ASSET = "mediapipe/selfie_segmenter.tflite"
 
         @Volatile private var instance: SegmentationEngine? = null
 
