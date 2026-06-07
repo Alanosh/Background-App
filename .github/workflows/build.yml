@@ -1,4 +1,4 @@
-name: Android CI (generate wrapper if missing, build, commit wrapper)
+name: Android CI
 
 on:
   push:
@@ -7,147 +7,36 @@ on:
     branches: [ "main", "master" ]
 
 permissions:
-  contents: write
-
-env:
-  GRADLE_VERSION: 8.5.1
-  JAVA_VERSION: 17
-  ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '${{ env.JAVA_VERSION }}'
-        distribution: 'temurin'
-        cache: 'gradle'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
 
-    - name: Setup Keystore
-      run: |
-        if [ -f "debug.keystore.base64" ]; then
-          echo "Decoding debug.keystore from base64..."
-          base64 -d debug.keystore.base64 > debug.keystore
-        else
-          echo "No debug.keystore.base64 found. Creating a generic debug keystore..."
+      - name: Setup Keystore
+        run: |
+          echo "Creating debug keystore..."
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-        fi
 
-    - name: Setup environment secrets file
-      run: |
-        if [ ! -f ".env" ]; then
-          if [ -f ".env.example" ]; then
-            cp .env.example .env
-          else
-            touch .env
-          fi
-        fi
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-    - name: Cache Gradle directories
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*','**/gradle/wrapper/gradle-wrapper.properties') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug --stacktrace
 
-    - name: Generate Gradle
-      env:
-        GRADLE_VERSION: ${{ env.GRADLE_VERSION }}
-        GITHUB_WORKSPACE: ${{ github.workspace }}
-      run: |
-        set -euo pipefail
-        if [ -f "./gradlew" ]; then
-          echo "gradlew already present — skipping generation."
-          exit 0
-        fi
-        echo "gradlew not found — generating wrapper in a temporary minimal project"
-        TMPDIR=$(mktemp -d)
-        GRADLE_ZIP="/tmp/gradle-${GRADLE_VERSION}-bin.zip"
-        # download Gradle distribution if missing
-        if [ ! -f "${GRADLE_ZIP}" ]; then
-          wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -O "${GRADLE_ZIP}"
-        fi
-        rm -rf "/tmp/gradle-${GRADLE_VERSION}"
-        unzip -q "${GRADLE_ZIP}" -d /tmp
-        export PATH="/tmp/gradle-${GRADLE_VERSION}/bin:${PATH}"
-        echo "Creating minimal project at ${TMPDIR}"
-        cat > "${TMPDIR}/settings.gradle" <<'SG'
-rootProject.name = 'tmp-wrapper-gen'
-SG
-        cd "${TMPDIR}"
-        gradle wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type all
-        echo "Copying wrapper files into repo workspace ${GITHUB_WORKSPACE}"
-        cp gradlew gradlew.bat "${GITHUB_WORKSPACE}/"
-        mkdir -p "${GITHUB_WORKSPACE}/gradle/wrapper"
-        cp -r gradle/wrapper/* "${GITHUB_WORKSPACE}/gradle/wrapper/"
-        chmod +x "${GITHUB_WORKSPACE}/gradlew"
-        echo "Generated wrapper copied."
-
-    - name: Grant Gradle execute permission
-      run: chmod +x ./gradlew || true
-
-    - name: Install Android command-line tools and SDK (platform 34, build-tools 34.0.0)
-      env:
-        ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-        PATH: ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin:${PATH}
-      run: |
-        set -euo pipefail
-        mkdir -p "${ANDROID_SDK_ROOT}"
-        cd "${ANDROID_SDK_ROOT}"
-        CLTOOLS_ZIP="/tmp/cmdline-tools.zip"
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O "$CLTOOLS_ZIP"
-        unzip -q "$CLTOOLS_ZIP" -d cmdline-tools/tmp
-        mkdir -p cmdline-tools/latest
-        mv cmdline-tools/tmp/cmdline-tools/* cmdline-tools/latest/
-        rm -f "$CLTOOLS_ZIP"
-        export PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${PATH}"
-        yes | sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --licenses || true
-        sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-
-    - name: Show workspace (debug)
-      run: |
-        echo "Workspace: $GITHUB_WORKSPACE"
-        ls -la
-        ls -la gradle || true
-        ./gradlew --version || true
-
-    - name: Build Debug APK
-      run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: Graph-debug-apk
-        path: app/build/outputs/apk/debug/*.apk
-
-    - name: Commit generated Gradle wrapper back to repo (if any)
-      if: always()
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        set -euo pipefail
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        # Add wrapper files only
-        git add gradlew gradlew.bat gradle/wrapper || true
-        if git diff --cached --quiet; then
-          echo "No wrapper changes to commit"
-          exit 0
-        fi
-        git commit -m "Add generated Gradle wrapper (Gradle ${GRADLE_VERSION})"
-        if git push; then
-          echo "Pushed generated wrapper to remote"
-        else
-          echo "WARNING: git push failed (protected branch or permission). Wrapper is present in workspace but was not pushed."
-        fi
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VBR-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
