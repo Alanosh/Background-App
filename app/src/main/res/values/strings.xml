@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VBR</string>
+    <string name="import_video">Import Video</string>
+    <string name="export">Export</string>
+    <string name="trim">Trim / Split</string>
+    <string name="background">Background</string>
+    <string name="adjustments">Adjustments</string>
+    <string name="effects">Effects</string>
+    <string name="undo">Undo</string>
+    <string name="lasso">Lasso</string>
+    <string name="magnetic">Magnetic</string>
+    <string name="brush">Brush</string>
+    <string name="snapshot">Snapshot</string>
+</resources>

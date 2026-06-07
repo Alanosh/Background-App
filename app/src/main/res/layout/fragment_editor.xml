@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black">
+
+    <!-- Video preview surface -->
+    <com.personal.vbr.ui.components.PreviewSurface
+        android:id="@+id/previewSurface"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/toolbarRow"
+        app:layout_constraintDimensionRatio="16:9" />
+
+    <!-- Selection overlay — sits on top of preview, draws tool paths -->
+    <com.personal.vbr.ui.components.SelectionOverlay
+        android:id="@+id/selectionOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@android:color/transparent"
+        app:layout_constraintTop_toTopOf="@id/previewSurface"
+        app:layout_constraintBottom_toBottomOf="@id/previewSurface"
+        app:layout_constraintStart_toStartOf="@id/previewSurface"
+        app:layout_constraintEnd_toEndOf="@id/previewSurface"/>
+
+    <!-- Background cache loading progress -->
+    <ProgressBar
+        android:id="@+id/bgCacheProgress"
+        style="@style/Widget.AppCompat.ProgressBar.Horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/previewSurface"
+        app:layout_constraintStart_toStartOf="parent"/>
+
+    <!-- Tool row: undo, lasso, magnetic, brush, snapshot -->
+    <LinearLayout
+        android:id="@+id/toolbarRow"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:background="@color/surface_variant"
+        android:paddingHorizontal="8dp"
+        app:layout_constraintBottom_toTopOf="@id/controlRow">
+
+        <ImageButton android:id="@+id/btnUndo"
+            android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:src="@android:drawable/ic_menu_revert"
+            android:tint="@color/on_surface" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+        <ImageButton android:id="@+id/btnLasso"
+            android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:src="@android:drawable/ic_menu_edit"
+            android:tint="@color/tool_inactive" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+        <ImageButton android:id="@+id/btnMagnetic"
+            android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:src="@android:drawable/ic_menu_search"
+            android:tint="@color/tool_inactive" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+        <ImageButton android:id="@+id/btnBrush"
+            android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:src="@android:drawable/ic_menu_add"
+            android:tint="@color/tool_inactive" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+        <ImageButton android:id="@+id/btnSnapshot"
+            android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:src="@android:drawable/ic_menu_camera"
+            android:tint="@color/on_surface" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+        <ImageButton android:id="@+id/btnTrim"
+            android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:src="@android:drawable/ic_menu_crop"
+            android:tint="@color/on_surface" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+        <ImageButton android:id="@+id/btnExport"
+            android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:src="@android:drawable/ic_menu_share"
+            android:tint="@color/accent" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+    </LinearLayout>
+
+    <!-- Playback + panel toggle row -->
+    <LinearLayout
+        android:id="@+id/controlRow"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:background="@color/surface"
+        android:paddingHorizontal="8dp"
+        android:gravity="center_vertical"
+        app:layout_constraintBottom_toTopOf="@id/scrubber">
+
+        <ImageButton android:id="@+id/btnPlay"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:src="@android:drawable/ic_media_play"
+            android:tint="@color/accent" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+        <ImageButton android:id="@+id/btnPause"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:src="@android:drawable/ic_media_pause"
+            android:tint="@color/accent" android:background="?attr/selectableItemBackgroundBorderless"
+            android:visibility="gone"/>
+
+        <Button android:id="@+id/btnSpeed"
+            android:layout_width="56dp" android:layout_height="36dp"
+            android:text="1x" android:textColor="@color/on_surface"
+            android:backgroundTint="@color/surface_variant"
+            android:textSize="12sp"/>
+
+        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+
+        <ImageButton android:id="@+id/btnBackground"
+            android:layout_width="40dp" android:layout_height="40dp"
+            android:src="@android:drawable/ic_menu_gallery"
+            android:tint="@color/on_surface_dim" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+        <ImageButton android:id="@+id/btnAdjustments"
+            android:layout_width="40dp" android:layout_height="40dp"
+            android:src="@android:drawable/ic_menu_manage"
+            android:tint="@color/on_surface_dim" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+        <ImageButton android:id="@+id/btnEffects"
+            android:layout_width="40dp" android:layout_height="40dp"
+            android:src="@android:drawable/ic_menu_slideshow"
+            android:tint="@color/on_surface_dim" android:background="?attr/selectableItemBackgroundBorderless"/>
+
+    </LinearLayout>
+
+    <!-- Frame scrubber -->
+    <com.personal.vbr.ui.components.FrameScrubber
+        android:id="@+id/scrubber"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface"
+        android:paddingHorizontal="12dp"
+        android:paddingBottom="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"/>
+
+    <!-- Collapsible panels — initially hidden -->
+    <com.personal.vbr.ui.components.BackgroundPicker
+        android:id="@+id/backgroundPicker"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface_variant"
+        android:padding="12dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/controlRow"/>
+
+    <com.personal.vbr.ui.components.AdjustmentPanel
+        android:id="@+id/adjustmentPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface_variant"
+        android:padding="12dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/controlRow"/>
+
+    <com.personal.vbr.ui.components.EffectsPanel
+        android:id="@+id/effectsPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface_variant"
+        android:padding="12dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/controlRow"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/black"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Trim / Split"
+        android:textSize="28sp"
+        android:textColor="@color/accent"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp"/>
+
+    <!-- Trim range display -->
+    <TextView
+        android:id="@+id/tvTrimRange"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Trim: 0:00 → end"
+        android:textColor="@color/on_surface_dim"
+        android:layout_marginBottom="8dp"/>
+
+    <!-- Range seek bar placeholder — implement with custom RangeSeekBar -->
+    <SeekBar
+        android:id="@+id/rangeSeekBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnApplyTrim"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="Apply Trim"
+        android:backgroundTint="@color/accent"
+        android:textColor="@color/black"
+        app:cornerRadius="12dp"
+        android:layout_marginBottom="32dp"/>
+
+    <!-- Split section -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/surface_variant"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Split"
+        android:textSize="20sp"
+        android:textColor="@color/on_surface"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/tvSplitPoints"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="No split points"
+        android:textColor="@color/on_surface_dim"
+        android:layout_marginBottom="12dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddSplit"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="Add Split at Playhead"
+            android:backgroundTint="@color/surface_variant"
+            android:textColor="@color/on_surface"
+            app:cornerRadius="12dp"
+            android:layout_marginEnd="8dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnClearSplits"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:text="✕"
+            android:backgroundTint="@color/danger"
+            android:textColor="@color/white"
+            app:cornerRadius="12dp"/>
+
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnApplySplit"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="Apply Split"
+        android:backgroundTint="@color/accent"
+        android:textColor="@color/black"
+        app:cornerRadius="12dp"
+        android:layout_marginTop="16dp"/>
+
+</LinearLayout>
